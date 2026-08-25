@@ -20,11 +20,24 @@ connectDB();
 
 const app = express();
 
-// Middleware
+// Secure CORS configuration
+const allowedOrigins = [
+  'http://localhost:5173',
+  process.env.FRONTEND_URL
+].filter(Boolean);
+
 const corsOptions = {
-  origin: process.env.FRONTEND_URL || '*',
-  methods: ['GET', 'POST', 'PUT', 'DELETE'],
-  allowedHeaders: ['Content-Type', 'Authorization']
+  origin: function (origin, callback) {
+    // Allow requests with no origin (like mobile apps, curl, or server-to-server)
+    if (!origin || allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  methods: ['GET', 'POST', 'PUT', 'DELETE', 'PATCH', 'OPTIONS'],
+  allowedHeaders: ['Content-Type', 'Authorization'],
+  credentials: true
 };
 app.use(cors(corsOptions));
 app.use(express.json());
@@ -37,9 +50,12 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/activities', activityRoutes);
 
-// Base route for status check
+// Simple Health Endpoint
 app.get('/api/health', (req, res) => {
-  res.json({ status: 'OK', message: 'Inventory API is running smoothly' });
+  res.status(200).json({
+    success: true,
+    message: "StockFlow API is running"
+  });
 });
 
 // Error handling for 404
@@ -52,9 +68,6 @@ app.use((err, req, res, next) => {
   let error = { ...err };
   error.message = err.message;
 
-  // Log to console for developer
-  console.error(err);
-
   // Mongoose bad ObjectId CastError
   if (err.name === 'CastError') {
     return res.status(404).json({ message: 'Resource not found.' });
@@ -63,7 +76,7 @@ app.use((err, req, res, next) => {
   // Mongoose duplicate key error (code 11000)
   if (err.code === 11000) {
     const field = Object.keys(err.keyValue || {})[0] || 'field';
-    return res.status(400).json({ message: `A record with this ${field} already exists.` });
+    return res.status(409).json({ message: `A record with this ${field} already exists.` });
   }
 
   // Mongoose validation error
@@ -81,6 +94,11 @@ app.use((err, req, res, next) => {
 
 const PORT = process.env.PORT || 5000;
 
-app.listen(PORT, () => {
-  console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
-});
+// Only spin up listener in local development to avoid blocking Vercel Serverless deployments
+if (process.env.NODE_ENV !== 'production' || !process.env.VERCEL) {
+  app.listen(PORT, () => {
+    console.log(`Server is running in ${process.env.NODE_ENV || 'development'} mode on port ${PORT}`);
+  });
+}
+
+module.exports = app;
