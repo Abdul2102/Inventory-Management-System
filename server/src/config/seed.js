@@ -22,8 +22,26 @@ const categoriesData = [
 const seed = async () => {
   try {
     console.log('Connecting to database...');
-    await mongoose.connect(process.env.MONGO_URI || 'mongodb://localhost:27017/inventory');
-    console.log('Connected to database.');
+    let connected = false;
+    try {
+      await mongoose.connect(process.env.MONGO_URI);
+      console.log('Connected to remote database.');
+      connected = true;
+    } catch (err) {
+      console.error('Remote MongoDB Connection Error during seeding:', err.message);
+      console.log('Attempting local database connection fallback...');
+      try {
+        await mongoose.connect('mongodb://127.0.0.1:27017/stockflow');
+        console.log('Connected to local database fallback.');
+        connected = true;
+      } catch (localErr) {
+        console.error('All database connection attempts failed:', localErr.message);
+      }
+    }
+
+    if (!connected) {
+      process.exit(1);
+    }
 
     // 1. Find or create default admin user
     let adminUser = await User.findOne({ role: 'admin' });
