@@ -13,6 +13,7 @@ const connectDB = async () => {
       bufferCommands: false,
     });
     cachedConnection = conn;
+    console.log(`MongoDB Connected: ${conn.connection.host}`);
     return conn;
   } catch (error) {
     console.error(`Remote MongoDB Connection Error: ${error.message}`);
