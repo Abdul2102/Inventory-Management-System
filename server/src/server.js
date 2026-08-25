@@ -21,9 +21,19 @@ connectDB();
 const app = express();
 
 // Secure CORS configuration
+const getOrigin = (url) => {
+  if (!url) return '';
+  try {
+    const parsed = new URL(url.trim());
+    return parsed.origin;
+  } catch (e) {
+    return url.trim().replace(/\/$/, '');
+  }
+};
+
 const allowedOrigins = [
   'http://localhost:5173',
-  process.env.FRONTEND_URL
+  getOrigin(process.env.FRONTEND_URL)
 ].filter(Boolean);
 
 const corsOptions = {

@@ -1,7 +1,28 @@
 import axios from 'axios';
 
+const getBaseURL = () => {
+  const url = import.meta.env.VITE_API_URL;
+  if (!url) return '/api';
+  
+  // Normalize URL: remove trailing slashes
+  const cleanUrl = url.trim().replace(/\/$/, '');
+  
+  // If the url already contains /api, return it
+  if (cleanUrl.endsWith('/api')) {
+    return cleanUrl;
+  }
+  
+  // If user pointed it to their login page or similar, extract the root host
+  try {
+    const parsed = new URL(cleanUrl);
+    return `${parsed.origin}/api`;
+  } catch (e) {
+    return `${cleanUrl}/api`;
+  }
+};
+
 const api = axios.create({
-  baseURL: import.meta.env.VITE_API_URL || '/api',
+  baseURL: getBaseURL(),
   headers: {
     'Content-Type': 'application/json'
   }
