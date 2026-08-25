@@ -60,6 +60,14 @@ app.use('/api/transactions', transactionRoutes);
 app.use('/api/dashboard', dashboardRoutes);
 app.use('/api/activities', activityRoutes);
 
+// Root Endpoint
+app.get('/', (req, res) => {
+  res.status(200).json({
+    success: true,
+    message: "StockFlow API is running"
+  });
+});
+
 // Simple Health Endpoint
 app.get('/api/health', (req, res) => {
   res.status(200).json({
