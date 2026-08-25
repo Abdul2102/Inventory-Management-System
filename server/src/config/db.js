@@ -1,50 +1,54 @@
 const mongoose = require('mongoose');
 
-let cachedPromise = null;
+let cachedConnection = null;
 
 const connectDB = async () => {
+  // If MONGO_URI is missing, throw a clear configuration error
+  if (!process.env.MONGO_URI) {
+    throw new Error('Database configuration error: MONGO_URI environment variable is missing.');
+  }
+
   // 1. If connection state is connected (1), return immediately
   if (mongoose.connection.readyState === 1) {
     return mongoose.connection;
   }
 
-  // 2. If connection is already establishing (2), return the active promise
-  if (mongoose.connection.readyState === 2 && cachedPromise) {
-    return cachedPromise;
+  // 2. If a connection promise is in progress, await it
+  if (cachedConnection) {
+    console.log('Awaiting existing database connection handshake...');
+    await cachedConnection;
+    return mongoose.connection;
   }
 
-  // 3. If disconnected (0), create a new connection handshake promise
-  if (!cachedPromise || mongoose.connection.readyState === 0) {
-    if (!process.env.MONGO_URI) {
-      throw new Error('MONGO_URI is missing from environment variables.');
+  // 3. Otherwise, initiate a new connection promise
+  console.log('Initiating new MongoDB connection...');
+  cachedConnection = mongoose.connect(process.env.MONGO_URI, {
+    bufferCommands: false, // Strict command gating
+  });
+
+  try {
+    await cachedConnection;
+    console.log(`MongoDB Connected: ${mongoose.connection.host}`);
+    return mongoose.connection;
+  } catch (error) {
+    cachedConnection = null; // Clear cached promise on error to allow retry
+    console.error(`Remote MongoDB Connection Error: ${error.message}`);
+    
+    // Fallback to local MongoDB instance
+    console.log('Attempting connection to local MongoDB database fallback...');
+    try {
+      cachedConnection = mongoose.connect('mongodb://127.0.0.1:27017/stockflow', {
+        bufferCommands: false,
+      });
+      await cachedConnection;
+      console.log(`MongoDB Connected to local fallback: ${mongoose.connection.host}`);
+      return mongoose.connection;
+    } catch (localError) {
+      cachedConnection = null;
+      console.error(`Local MongoDB Connection Error: ${localError.message}`);
+      throw new Error(`Database connection failed: ${localError.message}`);
     }
-
-    cachedPromise = mongoose.connect(process.env.MONGO_URI, {
-      bufferCommands: false, // Enforce strict query gating
-    })
-    .then((conn) => {
-      console.log(`MongoDB Connected: ${conn.connection.host}`);
-      return conn;
-    })
-    .catch(async (error) => {
-      cachedPromise = null; // Clear cached promise on failure to allow retry
-      console.error(`Remote MongoDB Connection Error: ${error.message}`);
-      console.log('Attempting local database connection fallback...');
-      
-      try {
-        const localConn = await mongoose.connect('mongodb://127.0.0.1:27017/stockflow', {
-          bufferCommands: false,
-        });
-        console.log(`MongoDB Connected to local fallback: ${localConn.connection.host}`);
-        return localConn;
-      } catch (localError) {
-        console.error(`Local MongoDB Connection Error: ${localError.message}`);
-        throw localError;
-      }
-    });
   }
-
-  return cachedPromise;
 };
 
 module.exports = connectDB;

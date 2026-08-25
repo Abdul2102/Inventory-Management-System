@@ -1,5 +1,6 @@
 const User = require('../models/User');
 const jwt = require('jsonwebtoken');
+const connectDB = require('../config/db');
 
 // Generate JWT
 const generateToken = (id, role) => {
@@ -36,6 +37,9 @@ const registerUser = async (req, res) => {
   }
 
   try {
+    // Ensure DB connection is active before querying User
+    await connectDB();
+
     // Check if user already exists
     const userExists = await User.findOne({ email });
 
@@ -79,6 +83,9 @@ const loginUser = async (req, res) => {
   }
 
   try {
+    // Ensure DB connection is active before querying User
+    await connectDB();
+
     // Find user by email
     const user = await User.findOne({ email });
 

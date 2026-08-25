@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
 const User = require('../models/User');
+const connectDB = require('../config/db');
 
 const protect = async (req, res, next) => {
   let token;
@@ -14,6 +15,9 @@ const protect = async (req, res, next) => {
 
       // Verify token
       const decoded = jwt.verify(token, process.env.JWT_SECRET || 'supersecretjwtkey12345!');
+
+      // Ensure database is fully connected before User lookup
+      await connectDB();
 
       // Get user from the token, excluding password
       req.user = await User.findById(decoded.id).select('-password');
