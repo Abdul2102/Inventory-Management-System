@@ -4,6 +4,7 @@ dns.setServers(['8.8.8.8', '8.8.4.4']);
 const express = require('express');
 const cors = require('cors');
 const dotenv = require('dotenv');
+const mongoose = require('mongoose');
 const connectDB = require('./config/db');
 const authRoutes = require('./routes/authRoutes');
 const categoryRoutes = require('./routes/categoryRoutes');
@@ -16,7 +17,9 @@ const activityRoutes = require('./routes/activityRoutes');
 dotenv.config();
 
 // Connect to Database
-connectDB();
+connectDB().catch((err) => {
+  console.error('Initial database connection attempt failed:', err.message);
+});
 
 const app = express();
 
@@ -58,13 +61,7 @@ const corsOptions = {
 app.use(cors(corsOptions));
 app.use(express.json());
 
-// Routes
-app.use('/api/auth', authRoutes);
-app.use('/api/categories', categoryRoutes);
-app.use('/api/products', productRoutes);
-app.use('/api/transactions', transactionRoutes);
-app.use('/api/dashboard', dashboardRoutes);
-app.use('/api/activities', activityRoutes);
+// --- UNGATED ROUTES (Do not block on database connectivity checks) ---
 
 // Root Endpoint
 app.get('/', (req, res) => {
@@ -74,13 +71,56 @@ app.get('/', (req, res) => {
   });
 });
 
-// Simple Health Endpoint
-app.get('/api/health', (req, res) => {
-  res.status(200).json({
-    success: true,
-    message: "StockFlow API is running"
-  });
+// Production Grade Health Endpoint
+app.get('/api/health', async (req, res) => {
+  const isConnected = mongoose.connection.readyState === 1;
+  
+  if (isConnected) {
+    return res.status(200).json({
+      success: true,
+      api: "StockFlow API",
+      database: "connected"
+    });
+  }
+
+  // Attempt to reconnect if disconnected
+  try {
+    await connectDB();
+    return res.status(200).json({
+      success: true,
+      api: "StockFlow API",
+      database: "connected"
+    });
+  } catch (err) {
+    return res.status(503).json({
+      success: false,
+      api: "StockFlow API",
+      database: "disconnected"
+    });
+  }
 });
+
+// --- GATED ROUTES (Guarantees active database connection before executing any queries) ---
+app.use(async (req, res, next) => {
+  try {
+    await connectDB();
+    next();
+  } catch (err) {
+    console.error('Database connection gating error:', err.message);
+    res.status(500).json({
+      success: false,
+      message: 'Database connection unavailable.'
+    });
+  }
+});
+
+// API Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/categories', categoryRoutes);
+app.use('/api/products', productRoutes);
+app.use('/api/transactions', transactionRoutes);
+app.use('/api/dashboard', dashboardRoutes);
+app.use('/api/activities', activityRoutes);
 
 // Error handling for 404
 app.use((req, res, next) => {
